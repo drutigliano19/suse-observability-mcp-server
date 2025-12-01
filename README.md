@@ -1,0 +1,1 @@
+# suse-observability-mcp-server
