@@ -15,13 +15,14 @@ import (
 func main() {
 	// SUSE Observability flags
 	url := flag.String("url", "", "SUSE Observability API URL")
-	serviceToken := flag.String("token", "", "SUSE Observability API Token")
+	token := flag.String("token", "", "SUSE Observability API Token")
+	useAPIToken := flag.Bool("apitoken", false, "Indicates if the token is an API token, instead of a service token")
 
 	// MCP server flags
 	listenAddr := flag.String("http", "", "address for http transport, defaults to stdio")
 	flag.Parse()
 
-	client, err := suseobservability.NewClient(*url, *serviceToken)
+	client, err := suseobservability.NewClient(*url, *token, *useAPIToken)
 	if err != nil {
 		return
 	}

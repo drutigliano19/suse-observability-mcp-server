@@ -17,8 +17,9 @@ import (
 )
 
 type Client struct {
-	soURL string
-	token string
+	soURL    string
+	token    string
+	apiToken bool
 }
 
 var (
@@ -27,7 +28,7 @@ var (
 	}
 )
 
-func NewClient(soURL, serviceToken string) (c *Client, err error) {
+func NewClient(soURL, serviceToken string, apiToken bool) (c *Client, err error) {
 	_, err = url.ParseRequestURI(soURL)
 	if err != nil {
 		return
@@ -35,6 +36,7 @@ func NewClient(soURL, serviceToken string) (c *Client, err error) {
 	c = new(Client)
 	c.soURL, _ = strings.CutSuffix(soURL, "/")
 	c.token = serviceToken
+	c.apiToken = apiToken
 	return
 }
 
@@ -301,7 +303,14 @@ func (c Client) GetEvent(ctx context.Context, eventId string, startMs int64, end
 func (c Client) apiRequests(endpoint string) *rq.Builder {
 	uri := fmt.Sprintf("%s/api/%s", c.soURL, endpoint)
 	return request(uri).
-		Header("X-API-Key", c.token)
+		Header(c.GetXHeader(), c.token)
+}
+
+func (c Client) GetXHeader() string {
+	if c.apiToken {
+		return "X-API-Token"
+	}
+	return "X-API-Key"
 }
 
 func request(uri string) *rq.Builder {
