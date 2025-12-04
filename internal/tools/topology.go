@@ -14,8 +14,6 @@ type GetComponentsParams struct {
 	// Filters - all support multiple comma-separated values
 	Names        string `json:"names,omitempty" jsonschema:"Component names to match (comma-separated for multiple values, e.g., 'checkout-service,redis-master')"`
 	Types        string `json:"types,omitempty" jsonschema:"Component types to filter (comma-separated, e.g., 'pod,service,deployment')"`
-	Layers       string `json:"layers,omitempty" jsonschema:"Layers to filter (comma-separated, e.g., 'Containers,Services')"`
-	Domains      string `json:"domains,omitempty" jsonschema:"Domains to filter (comma-separated, e.g., 'cluster1.example.com,cluster2.example.com')"`
 	HealthStates string `json:"healthstates,omitempty" jsonschema:"Health states to filter (comma-separated, e.g., 'CRITICAL,DEVIATING')"`
 
 	// withNeighborsOf parameters
@@ -67,16 +65,6 @@ func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, p
 		queryParts = append(queryParts, clause)
 	}
 
-	// Add layers filter
-	if clause := buildInClause("layer", params.Layers); clause != "" {
-		queryParts = append(queryParts, clause)
-	}
-
-	// Add domains filter
-	if clause := buildInClause("domain", params.Domains); clause != "" {
-		queryParts = append(queryParts, clause)
-	}
-
 	// Add healthstates filter
 	if clause := buildInClause("healthstate", params.HealthStates); clause != "" {
 		queryParts = append(queryParts, clause)
@@ -116,7 +104,7 @@ func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, p
 	}
 
 	if query == "" {
-		return nil, nil, fmt.Errorf("at least one filter (names, types, layers, domains, healthstates) must be provided")
+		return nil, nil, fmt.Errorf("at least one filter (names, types, healthstates) must be provided")
 	}
 
 	// Execute topology query
@@ -165,12 +153,6 @@ func formatComponentsTable(components []Component, params GetComponentsParams, q
 	}
 	if params.Types != "" {
 		filters = append(filters, fmt.Sprintf("types: %s", params.Types))
-	}
-	if params.Layers != "" {
-		filters = append(filters, fmt.Sprintf("layers: %s", params.Layers))
-	}
-	if params.Domains != "" {
-		filters = append(filters, fmt.Sprintf("domains: %s", params.Domains))
 	}
 	if params.HealthStates != "" {
 		filters = append(filters, fmt.Sprintf("healthstates: %s", params.HealthStates))

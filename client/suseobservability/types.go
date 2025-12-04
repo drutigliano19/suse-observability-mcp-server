@@ -648,3 +648,20 @@ type MonitorCheckStatusComponent struct {
 	Type       string `json:"type"`
 	IconBase64 string `json:"iconbase64,omitempty"`
 }
+
+type BoundMetricsResponse struct {
+	Type         string        `json:"_type"`
+	BoundMetrics []BoundMetric `json:"boundMetrics"`
+}
+
+type BoundMetric struct {
+	Type         string       `json:"_type"`
+	BoundQueries []BoundQuery `json:"boundQueries"`
+	Name         string       `json:"name"`
+	Unit         string       `json:"unit"`
+}
+
+type BoundQuery struct {
+	Expression string `json:"expression"`
+	Alias      string `json:"alias"`
+}

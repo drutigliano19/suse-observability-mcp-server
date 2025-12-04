@@ -432,3 +432,17 @@ func (c Client) GetMonitorCheckStatus(ctx context.Context, id int64, topologyTim
 	}
 	return &res, nil
 }
+
+// GetBoundMetricsWithData retrieves bound metrics for a specific component
+func (c Client) GetBoundMetricsWithData(ctx context.Context, componentID int64, start, end time.Time) (*BoundMetricsResponse, error) {
+	var res BoundMetricsResponse
+	err := c.apiRequests(fmt.Sprintf("components/%d/boundMetricsWithData", componentID)).
+		Param("startSeconds", strconv.FormatInt(start.Unix(), 10)).
+		Param("endSeconds", strconv.FormatInt(end.Unix(), 10)).
+		ToJSON(&res).
+		Fetch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}

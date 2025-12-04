@@ -5,10 +5,11 @@
 ## Workflow
 
 ### Standard Investigation Flow
-1. Check monitors and their current states for affected components
-2. Analyze monitor health states and identify issues
-3. Use topology tools to find components and their relationships
-4. Query relevant metrics to understand resource usage and trends
+1. Use topology tools to find components by health state (e.g., CRITICAL, DEVIATING)
+2. Extract component IDs from topology results
+3. For each component of interest, query monitors using listMonitors with the component ID
+4. For each component of interest, use listMetrics with the component ID to discover available bound metrics
+5. Query specific metrics using getMetrics with PromQL based on monitor information and bound metrics
 
 ### General Guidelines
 
@@ -21,15 +22,18 @@
 ### Best Practices
 
 1. **Start Broad, Then Narrow:**
-   - Use `getComponents` to identify components and their health states
-   - Use `getMonitors` to find monitors in failing states
-   - Use `listMetrics` to discover available metrics
-   - Use `getMetrics` for detailed metric analysis over time
+   - Use `getComponents` with health state filters to identify problematic components (e.g., `healthstates: 'CRITICAL,DEVIATING'`)
+   - Extract component IDs from the results
+   - For each component, use `listMonitors` with the component ID to see which monitors are failing
+   - For each component, use `listMetrics` with the component ID to discover available bound metrics
+   - Use `getMetrics` with PromQL queries for detailed metric analysis over time
 
 2. **Correlate Data:**
-   - Match monitor failures with metric spikes
+   - Match component health states with monitor failures to identify root causes
+   - Check which monitors are in CRITICAL/DEVIATING states for failing components
    - Investigate connected components using `with_neighbors` option
-   - Use `getComponents` with health state filters to find related issues
+   - Use `listMetrics` to discover which metrics are bound to failing components
+   - Use monitor information and bound metrics to identify which specific metrics to query with `getMetrics`
 
 3. **Time Range Selection:**
    - For recent issues: Use `'1h'` or `'30m'`
@@ -39,5 +43,5 @@
 4. **Optimize Queries:**
    - Use specific filters (names, types, health states) to reduce result volume
    - Take advantage of multi-value filters: use comma-separated values to query multiple items at once (e.g., `healthstates: 'CRITICAL,DEVIATING'`)
-   - Similarly, you can query multiple component types, layers, or names in a single call using comma-separated values
+   - Similarly, you can query multiple component types or names in a single call using comma-separated values
    - Start with simple filters and add `with_neighbors` only when you need to explore relationships

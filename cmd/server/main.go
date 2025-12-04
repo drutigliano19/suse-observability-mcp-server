@@ -32,12 +32,28 @@ func main() {
 	mcpServer := mcp.NewServer(&mcp.Implementation{Name: "SUSE Observability MCP server", Version: "v0.0.1"}, nil)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
-		Name: "listMetrics",
-		Description: `Searches for metrics in SUSE Observability by pattern and shows their available label keys.
-		Arguments:
-		- search_pattern (required): A regex pattern to search for metrics (e.g., 'cpu', 'memory', 'redis.*').
+		Name: "getComponents",
+		Description: `Searches for topology components using STQL filters.
+		Arguments (all support comma-separated values for multiple items):
+		- names (optional): Component names to match exactly (comma-separated, e.g., 'checkout-service,redis-master').
+		- types (optional): Component types (comma-separated, e.g., 'pod,service,deployment').
+		- healthstates (optional): Health states (comma-separated, e.g., 'CRITICAL,DEVIATING'). Useful to query multiple states at once.
+		- with_neighbors (optional): Include connected components using withNeighborsOf.
+		- with_neighbors_levels (optional): Number of levels (1-14) or 'all' (default: 1).
+		- with_neighbors_direction (optional): 'up', 'down', or 'both' (default: both).
+		At least one filter must be provided. All filters use STQL IN operator for efficient multi-value queries.
 		Returns:
-		A markdown table showing matching metric names and their available label keys (dimensions)`},
+		A markdown table of matching components with their IDs and identifiers`},
+		mcpTools.GetComponents,
+	)
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "listMetrics",
+		Description: `Lists metrics for a specific component.
+		Arguments:
+		- component_id (required): The ID of the component to list bound metrics for.
+		Returns:
+		A markdown table showing the bound metrics with their names, units, and query expressions.`,
+	},
 		mcpTools.ListMetrics,
 	)
 	mcp.AddTool(mcpServer, &mcp.Tool{
@@ -50,33 +66,16 @@ func main() {
 		- step (optional): Query resolution step width (e.g., '15s', '1m', '5m'). Default: '1m'.
 		Returns:
 		A markdown table showing the time series data with timestamps, values, and labels.`},
-		mcpTools.QueryRangeMetric,
+		mcpTools.QueryMetric,
 	)
 	mcp.AddTool(mcpServer, &mcp.Tool{
-		Name: "getMonitors",
-		Description: `Lists active monitors filtered by health state with component details.
+		Name: "listMonitors",
+		Description: `Lists monitors for a specific component.
 		Arguments:
-		- state (optional): Filter by state - 'CRITICAL', 'DEVIATING', or 'UNKNOWN' (default: CRITICAL).
+		- component_id (required): The ID of the component to list monitors for (from topology queries).
 		Returns:
-		Monitors in the specified state with affected component names and URNs`},
-		mcpTools.GetMonitors,
-	)
-	mcp.AddTool(mcpServer, &mcp.Tool{
-		Name: "getComponents",
-		Description: `Searches for topology components using STQL filters.
-		Arguments (all support comma-separated values for multiple items):
-		- names (optional): Component names to match exactly (comma-separated, e.g., 'checkout-service,redis-master').
-		- types (optional): Component types (comma-separated, e.g., 'pod,service,deployment').
-		- layers (optional): Layers (comma-separated, e.g., 'Containers,Services').
-		- domains (optional): Domains (comma-separated, e.g., 'cluster1.example.com,cluster2.example.com').
-		- healthstates (optional): Health states (comma-separated, e.g., 'CRITICAL,DEVIATING'). Useful to query multiple states at once.
-		- with_neighbors (optional): Include connected components using withNeighborsOf.
-		- with_neighbors_levels (optional): Number of levels (1-14) or 'all' (default: 1).
-		- with_neighbors_direction (optional): 'up', 'down', or 'both' (default: both).
-		At least one filter must be provided. All filters use STQL IN operator for efficient multi-value queries.
-		Returns:
-		A markdown table of matching components with their IDs and identifiers`},
-		mcpTools.GetComponents,
+		A markdown table showing monitors associated with the specified component and their current states.`},
+		mcpTools.ListMonitors,
 	)
 
 	if *listenAddr == "" {

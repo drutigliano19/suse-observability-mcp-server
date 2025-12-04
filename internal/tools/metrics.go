@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -13,89 +12,47 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type ListMetricsParams struct {
-	SearchPattern string `json:"search_pattern" jsonschema:"required,A regex pattern to search for specific metrics (e.g. 'cpu' 'memory' 'redis')"`
-}
-
-type QueryRangeMetricParams struct {
+type QueryMetricParams struct {
 	Query string `json:"query" jsonschema:"The PromQL query to execute"`
 	Start string `json:"start" jsonschema:"Start time: 'now' or duration (e.g. '1h')"`
 	End   string `json:"end" jsonschema:"End time: 'now' or duration (e.g. '1h')"`
 	Step  string `json:"step" jsonschema:"Query resolution step width in duration format or float number of seconds"`
 }
 
-func (t tool) ListMetrics(ctx context.Context, request *mcp.CallToolRequest, params ListMetricsParams) (*mcp.CallToolResult, any, error) {
-	// Validate required parameter
-	if params.SearchPattern == "" {
-		return nil, nil, fmt.Errorf("search_pattern is required")
-	}
+type ListMetricsParams struct {
+	ComponentID int64 `json:"component_id" jsonschema:"required,The ID of the component to list bound metrics for"`
+}
 
+// ListMetrics lists bound metrics for a specific component
+func (t tool) ListMetrics(ctx context.Context, request *mcp.CallToolRequest, params ListMetricsParams) (*mcp.CallToolResult, any, error) {
+	// Default time range: last 1 hour
 	end := time.Now()
 	start := end.Add(-1 * time.Hour)
-	metrics, err := t.client.ListMetrics(ctx, start, end)
+
+	boundMetrics, err := t.client.GetBoundMetricsWithData(ctx, params.ComponentID, start, end)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to list metrics: %w", err)
+		return nil, nil, fmt.Errorf("failed to list bound metrics: %w", err)
 	}
 
-	// Filter metrics by search_pattern
-	re, err := regexp.Compile(params.SearchPattern)
-	if err != nil {
-		return nil, nil, fmt.Errorf("invalid regex pattern: %w", err)
-	}
-
-	var filteredMetrics []string
-	for _, m := range metrics {
-		if re.MatchString(m) {
-			filteredMetrics = append(filteredMetrics, m)
-		}
-	}
-
-	if len(filteredMetrics) == 0 {
+	if len(boundMetrics.BoundMetrics) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: fmt.Sprintf("No metrics found matching '%s'.", params.SearchPattern),
+					Text: fmt.Sprintf("No bound metrics found for component ID %d.", params.ComponentID),
 				},
 			},
 		}, nil, nil
 	}
 
-	// Limit to 50 metrics to avoid timeouts
-	const maxMetrics = 50
-	metricsToProcess := filteredMetrics
-	truncated := false
-	if len(filteredMetrics) > maxMetrics {
-		metricsToProcess = filteredMetrics[:maxMetrics]
-		truncated = true
-	}
-
-	// Build table with labels
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Found %d metrics matching '%s'", len(filteredMetrics), params.SearchPattern))
-	if truncated {
-		sb.WriteString(fmt.Sprintf(" (showing first %d)", maxMetrics))
-	}
-	sb.WriteString(":\n\n")
-	sb.WriteString("| Metric Name | Labels |\n")
-	sb.WriteString("|---|---|\n")
+	sb.WriteString(fmt.Sprintf("Found %d bound metrics for component ID %d:\n\n", len(boundMetrics.BoundMetrics), params.ComponentID))
+	sb.WriteString("| Metric Name | Unit | Query Expression |\n")
+	sb.WriteString("|---|---|---|\n")
 
-	for _, metricName := range metricsToProcess {
-		labels, err := t.client.GetMetricLabels(ctx, metricName, start, end)
-		if err != nil {
-			// If we can't get labels, just show the metric with no labels
-			sb.WriteString(fmt.Sprintf("| %s | - |\n", metricName))
-			continue
+	for _, bm := range boundMetrics.BoundMetrics {
+		for _, bq := range bm.BoundQueries {
+			sb.WriteString(fmt.Sprintf("| %s | %s | `%s` |\n", bm.Name, bm.Unit, bq.Expression))
 		}
-
-		labelsStr := "-"
-		if len(labels) > 0 {
-			labelsStr = strings.Join(labels, ", ")
-		}
-		sb.WriteString(fmt.Sprintf("| %s | %s |\n", metricName, labelsStr))
-	}
-
-	if truncated {
-		sb.WriteString(fmt.Sprintf("\n_Note: Showing first %d of %d metrics. Use a more specific search pattern to narrow results._\n", maxMetrics, len(filteredMetrics)))
 	}
 
 	return &mcp.CallToolResult{
@@ -107,8 +64,8 @@ func (t tool) ListMetrics(ctx context.Context, request *mcp.CallToolRequest, par
 	}, nil, nil
 }
 
-// QueryRangeMetric queries a metric over a range of time
-func (t tool) QueryRangeMetric(ctx context.Context, request *mcp.CallToolRequest, params QueryRangeMetricParams) (*mcp.CallToolResult, any, error) {
+// QueryMetric queries a metric over a range of time
+func (t tool) QueryMetric(ctx context.Context, request *mcp.CallToolRequest, params QueryMetricParams) (*mcp.CallToolResult, any, error) {
 	start, err := parseTime(params.Start)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to parse start time: %w", err)

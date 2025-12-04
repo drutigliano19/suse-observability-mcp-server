@@ -17,9 +17,9 @@ The server currently exposes the following tools for AI agents:
 
 ### Metrics Tools
 
--   **`listMetrics`**: Searches for metrics in SUSE Observability by pattern and shows their available label keys.
-    -   Arguments: `search_pattern` (string, required): A regex pattern to search for metrics (e.g., 'cpu', 'memory', 'redis.*')
-    -   Returns: A markdown table showing matching metric names and their available label keys (dimensions)
+-   **`listMetrics`**: Lists bound metrics for a specific component.
+    -   Arguments: `component_id` (integer, required): The ID of the component to list bound metrics for (from topology queries)
+    -   Returns: A markdown table showing the bound metrics with their names, units, and query expressions
 
 -   **`getMetrics`**: Query metrics from SUSE Observability over a range of time.
     -   Arguments: 
@@ -31,9 +31,9 @@ The server currently exposes the following tools for AI agents:
 
 ### Monitors Tools
 
--   **`getMonitors`**: Lists active monitors filtered by health state with component details.
-    -   Arguments: `state` (string, optional): Filter by state - 'CRITICAL', 'DEVIATING', or 'UNKNOWN' (default: 'CRITICAL')
-    -   Returns: Monitors in the specified state with affected component names and URNs
+-   **`listMonitors`**: Lists monitors for a specific component.
+    -   Arguments: `component_id` (integer, required): The ID of the component to list monitors for (from topology queries)
+    -   Returns: A markdown table showing monitors associated with the specified component and their current states
 
 ### Topology Tools
 
@@ -41,8 +41,6 @@ The server currently exposes the following tools for AI agents:
     -   Arguments (all support comma-separated values for multiple items):
         - `names` (string, optional): Component names to match exactly (comma-separated, e.g., 'checkout-service,redis-master')
         - `types` (string, optional): Component types (comma-separated, e.g., 'pod,service,deployment')
-        - `layers` (string, optional): Layers (comma-separated, e.g., 'Containers,Services')
-        - `domains` (string, optional): Domains (comma-separated, e.g., 'cluster1.example.com,cluster2.example.com')
         - `healthstates` (string, optional): Health states (comma-separated, e.g., 'CRITICAL,DEVIATING'). Particularly useful to query multiple states at once
         - `with_neighbors` (boolean, optional): Include connected components using withNeighborsOf
         - `with_neighbors_levels` (string, optional): Number of levels (1-14) or 'all' (default: 1)
