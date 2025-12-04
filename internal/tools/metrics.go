@@ -100,14 +100,14 @@ func (t tool) QueryMetric(ctx context.Context, request *mcp.CallToolRequest, par
 
 func formatMetrics(metricsResult []suseobservability.MetricResult, queryName string) string {
 	if len(metricsResult) == 0 {
-		return "No data found."
+		return fmt.Sprintf("No data found for query: %s", queryName)
 	}
 
 	// Collect all unique label keys across all series
 	labelKeys := make(map[string]bool)
 	for _, res := range metricsResult {
 		for k := range res.Labels {
-			if k != "__name__" { // Skip __name__ as it's often the query itself
+			if k != "__name__" {
 				labelKeys[k] = true
 			}
 		}

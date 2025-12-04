@@ -21,18 +21,19 @@ type ServerInfo struct {
 }
 
 type SyncComponent struct {
-	Id                  int                    `json:"id"`
-	Identifiers         []string               `json:"identifiers"`
-	Labels              []Label                `json:"labels"`
-	Environments        []int                  `json:"environments"`
-	Domain              int                    `json:"domain"`
-	LastUpdateTimestamp int                    `json:"lastUpdateTimestamp"`
-	Layer               int                    `json:"layer"`
-	Name                string                 `json:"name"`
-	Properties          map[string]interface{} `json:"properties"`
-	State               map[string]interface{} `json:"state"`
-	SyncedElems         []SyncElem             `json:"synced"`
-	SyncedData          map[string][]SyncData  `json:"synchronizationData"`
+	Id                  int                      `json:"id"`
+	Identifiers         []string                 `json:"identifiers"`
+	Labels              []Label                  `json:"labels"`
+	Environments        []int                    `json:"environments"`
+	Domain              int                      `json:"domain"`
+	LastUpdateTimestamp int                      `json:"lastUpdateTimestamp"`
+	Layer               int                      `json:"layer"`
+	Name                string                   `json:"name"`
+	Properties          map[string]interface{}   `json:"properties"`
+	State               map[string]interface{}   `json:"state"`
+	SyncedElems         []SyncElem               `json:"synced"`
+	SyncedData          map[string][]SyncData    `json:"synchronizationData"`
+	SyncedCheckStates   []map[string]interface{} `json:"syncedCheckStates,omitempty"`
 
 	Tags []string `json:"tags"`
 }
@@ -664,4 +665,21 @@ type BoundMetric struct {
 type BoundQuery struct {
 	Expression string `json:"expression"`
 	Alias      string `json:"alias"`
+}
+
+// ComponentResponse is the wrapper returned by /api/components/{id}
+type ComponentResponse struct {
+	Node         ComponentNode `json:"node"`
+	Type         interface{}   `json:"type"`
+	Layer        interface{}   `json:"layer"`
+	Domain       interface{}   `json:"domain"`
+	Properties   interface{}   `json:"properties"`
+	InternalType string        `json:"_type"`
+}
+
+// ComponentNode contains the actual component data with synced check states
+type ComponentNode struct {
+	ID                int64                    `json:"id"`
+	Name              string                   `json:"name"`
+	SyncedCheckStates []map[string]interface{} `json:"syncedCheckStates"`
 }

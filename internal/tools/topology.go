@@ -15,6 +15,8 @@ type GetComponentsParams struct {
 	Names        string `json:"names,omitempty" jsonschema:"Component names to match (comma-separated for multiple values, e.g., 'checkout-service,redis-master')"`
 	Types        string `json:"types,omitempty" jsonschema:"Component types to filter (comma-separated, e.g., 'pod,service,deployment')"`
 	HealthStates string `json:"healthstates,omitempty" jsonschema:"Health states to filter (comma-separated, e.g., 'CRITICAL,DEVIATING')"`
+	Domains      string `json:"domains,omitempty" jsonschema:"Cluster names to filter (comma-separated, e.g., 'prod-cluster,staging-cluster'). Domain represents the cluster name."`
+	Namespace    string `json:"namespace,omitempty" jsonschema:"Kubernetes namespace to filter (e.g., 'default', 'kube-system')"`
 
 	// withNeighborsOf parameters
 	WithNeighbors          bool   `json:"with_neighbors,omitempty" jsonschema:"Include connected components using withNeighborsOf function"`
@@ -70,6 +72,16 @@ func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, p
 		queryParts = append(queryParts, clause)
 	}
 
+	// Add domains filter (cluster names)
+	if clause := buildInClause("domain", params.Domains); clause != "" {
+		queryParts = append(queryParts, clause)
+	}
+
+	// Add namespace filter
+	if params.Namespace != "" {
+		queryParts = append(queryParts, fmt.Sprintf("namespace = \"%s\"", params.Namespace))
+	}
+
 	// Combine basic filters with AND
 	if len(queryParts) > 0 {
 		query = strings.Join(queryParts, " AND ")
@@ -104,7 +116,7 @@ func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, p
 	}
 
 	if query == "" {
-		return nil, nil, fmt.Errorf("at least one filter (names, types, healthstates) must be provided")
+		return nil, nil, fmt.Errorf("at least one filter (names, types, healthstates, domains, namespace) must be provided")
 	}
 
 	// Execute topology query
@@ -113,8 +125,7 @@ func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, p
 		return nil, nil, fmt.Errorf("failed to query topology (STQL: %s): %w", query, err)
 	}
 
-	simplified := simplifyViewComponents(components)
-	table := formatComponentsTable(simplified, params, query)
+	table := formatComponentsTable(components, params, query)
 
 	return &mcp.CallToolResult{
 		Content: []mcp.Content{
@@ -125,19 +136,7 @@ func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, p
 	}, nil, nil
 }
 
-func simplifyViewComponents(components []suseobservability.ViewComponent) []Component {
-	var simplified []Component
-	for _, c := range components {
-		simplified = append(simplified, Component{
-			ID:    c.ID,
-			Name:  c.Name,
-			State: c.State.HealthState,
-		})
-	}
-	return simplified
-}
-
-func formatComponentsTable(components []Component, params GetComponentsParams, query string) string {
+func formatComponentsTable(components []suseobservability.ViewComponent, params GetComponentsParams, query string) string {
 	if len(components) == 0 {
 		return fmt.Sprintf("No components found for query: %s", query)
 	}
@@ -157,6 +156,12 @@ func formatComponentsTable(components []Component, params GetComponentsParams, q
 	if params.HealthStates != "" {
 		filters = append(filters, fmt.Sprintf("healthstates: %s", params.HealthStates))
 	}
+	if params.Domains != "" {
+		filters = append(filters, fmt.Sprintf("domains: %s", params.Domains))
+	}
+	if params.Namespace != "" {
+		filters = append(filters, fmt.Sprintf("namespace: %s", params.Namespace))
+	}
 	if len(filters) > 0 {
 		sb.WriteString(" (" + strings.Join(filters, ", ") + ")")
 	}
@@ -168,7 +173,7 @@ func formatComponentsTable(components []Component, params GetComponentsParams, q
 
 	// Data rows
 	for _, c := range components {
-		sb.WriteString(fmt.Sprintf("| %s | %d | %s |\n", c.Name, c.ID, c.State))
+		sb.WriteString(fmt.Sprintf("| %s | %d | %s |\n", c.Name, c.ID, c.State.HealthState))
 	}
 
 	return sb.String()

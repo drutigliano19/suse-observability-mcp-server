@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -153,44 +152,6 @@ func (c Client) QueryRangeMetric(ctx context.Context, query string, start time.T
 		return nil, err
 	}
 	return &m, nil
-}
-
-// GetMetricLabels fetches the unique label keys for a given metric
-func (c Client) GetMetricLabels(ctx context.Context, metricName string, start, end time.Time) ([]string, error) {
-	// Query for series matching the metric name to get all label keys
-	query := fmt.Sprintf("{__name__=\"%s\"}", metricName)
-	var res struct {
-		Data []map[string]string `json:"data"`
-	}
-
-	err := c.apiRequests("metrics/series").
-		Param("match[]", query).
-		Param("start", toMs(start)).
-		Param("end", toMs(end)).
-		ToJSON(&res).
-		Fetch(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Extract unique label keys from all series
-	labelKeys := make(map[string]bool)
-	for _, series := range res.Data {
-		for key := range series {
-			if key != "__name__" { // Skip the metric name itself
-				labelKeys[key] = true
-			}
-		}
-	}
-
-	// Convert to sorted slice
-	var keys []string
-	for key := range labelKeys {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	return keys, nil
 }
 
 func (c Client) SnapShotTopologyQuery(ctx context.Context, query string) ([]ViewComponent, error) {
@@ -439,6 +400,18 @@ func (c Client) GetBoundMetricsWithData(ctx context.Context, componentID int64, 
 	err := c.apiRequests(fmt.Sprintf("components/%d/boundMetricsWithData", componentID)).
 		Param("startSeconds", strconv.FormatInt(start.Unix(), 10)).
 		Param("endSeconds", strconv.FormatInt(end.Unix(), 10)).
+		ToJSON(&res).
+		Fetch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// GetComponent retrieves a component by ID with full details including synced check states
+func (c Client) GetComponent(ctx context.Context, componentID int64) (*ComponentResponse, error) {
+	var res ComponentResponse
+	err := c.apiRequests(fmt.Sprintf("components/%d", componentID)).
 		ToJSON(&res).
 		Fetch(ctx)
 	if err != nil {

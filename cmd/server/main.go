@@ -38,6 +38,8 @@ func main() {
 		- names (optional): Component names to match exactly (comma-separated, e.g., 'checkout-service,redis-master').
 		- types (optional): Component types (comma-separated, e.g., 'pod,service,deployment').
 		- healthstates (optional): Health states (comma-separated, e.g., 'CRITICAL,DEVIATING'). Useful to query multiple states at once.
+		- domains (optional): Cluster names to filter (comma-separated, e.g., 'prod-cluster,staging-cluster'). Domain represents the cluster name.
+		- namespace (optional): Kubernetes namespace to filter (e.g., 'default', 'kube-system').
 		- with_neighbors (optional): Include connected components using withNeighborsOf.
 		- with_neighbors_levels (optional): Number of levels (1-14) or 'all' (default: 1).
 		- with_neighbors_direction (optional): 'up', 'down', or 'both' (default: both).

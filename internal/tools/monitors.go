@@ -8,156 +8,78 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type GetMonitorsParams struct {
-	State string `json:"state,omitempty" jsonschema:"Filter by state. Allowed values: 'CRITICAL' 'DEVIATING' 'UNKNOWN',default=CRITICAL"`
+type ListMonitorsParams struct {
+	ComponentID int64 `json:"component_id" jsonschema:"required,The ID of the component to list monitors for"`
 }
 
-type MonitorData struct {
-	Name          string
-	Description   string
-	Query         string
-	CriticalCount int
-	WarningCount  int
-	ClearCount    int
-}
-
-// GetMonitors lists monitors filtered by health state with component details
-func (t tool) GetMonitors(ctx context.Context, request *mcp.CallToolRequest, params GetMonitorsParams) (*mcp.CallToolResult, any, error) {
-	// Default to CRITICAL if not specified
-	state := params.State
-	if state == "" {
-		state = "CRITICAL"
-	}
-
-	// Validate state parameter
-	validStates := map[string]bool{
-		"CRITICAL":  true,
-		"DEVIATING": true,
-		"UNKNOWN":   true,
-	}
-	if !validStates[state] {
-		return nil, nil, fmt.Errorf("invalid state '%s'. Allowed values: CRITICAL, DEVIATING, UNKNOWN", state)
-	}
-
-	// Get monitors overview
-	overview, err := t.client.GetMonitorsOverview(ctx)
+// ListMonitors lists monitors for a specific component using the Component API
+func (t tool) ListMonitors(ctx context.Context, request *mcp.CallToolRequest, params ListMonitorsParams) (*mcp.CallToolResult, any, error) {
+	// Get component with synced check states
+	res, err := t.client.GetComponent(ctx, params.ComponentID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get monitors overview: %w", err)
+		return nil, nil, fmt.Errorf("failed to get component: %w", err)
 	}
 
-	// Collect monitor data
-	type MonitorRow struct {
-		Name              string
-		Description       string
-		AffectedCount     int
-		AffectedComponent string
-	}
-	var rows []MonitorRow
-
-	for _, monitorOverview := range overview.Monitors {
-		monitor := monitorOverview.Monitor
-		metrics := monitorOverview.RuntimeMetrics
-
-		// Check if this monitor has components in the requested state
-		var count int
-		switch state {
-		case "CRITICAL":
-			count = metrics.CriticalCount
-		case "DEVIATING":
-			count = metrics.DeviatingCount
-		case "UNKNOWN":
-			count = metrics.UnknownCount
-		}
-
-		if count == 0 {
-			continue
-		}
-
-		// Fetch check states to get component details
-		checkStates, err := t.client.GetMonitorCheckStates(ctx, fmt.Sprintf("%d", monitor.Id), state, 10, 0)
-		if err != nil || len(checkStates.States) == 0 {
-			// Fallback: show monitor without component details
-			rows = append(rows, MonitorRow{
-				Name:              monitor.Name,
-				Description:       monitor.Description,
-				AffectedCount:     count,
-				AffectedComponent: "-",
-			})
-			continue
-		}
-
-		// List affected components (show first few)
-		componentsShown := 0
-		maxComponents := 5
-		for _, checkState := range checkStates.States {
-			if componentsShown >= maxComponents {
-				break
-			}
-			componentRef := fmt.Sprintf("ID:%d", checkState.TopologyElementId)
-			if checkState.TopologyElementIdType == "identifier" {
-				componentRef = fmt.Sprintf("URN:%d", checkState.TopologyElementId)
-			}
-			componentStr := fmt.Sprintf("%s (%s)", checkState.Name, componentRef)
-
-			rows = append(rows, MonitorRow{
-				Name:              monitor.Name,
-				Description:       monitor.Description,
-				AffectedCount:     count,
-				AffectedComponent: componentStr,
-			})
-			componentsShown++
-		}
-
-		// Add "more" row if there are additional components
-		if len(checkStates.States) > maxComponents {
-			rows = append(rows, MonitorRow{
-				Name:              monitor.Name,
-				Description:       "-",
-				AffectedCount:     count,
-				AffectedComponent: fmt.Sprintf("... and %d more", len(checkStates.States)-maxComponents),
-			})
-		}
-	}
-
-	// Build output
-	var sb strings.Builder
-
-	if len(rows) == 0 {
+	// Check if component has synced check states
+	if len(res.Node.SyncedCheckStates) == 0 {
 		return &mcp.CallToolResult{
 			Content: []mcp.Content{
 				&mcp.TextContent{
-					Text: fmt.Sprintf("No monitors in %s state found.", state),
+					Text: fmt.Sprintf("No monitors found for component '%s' (ID: %d)", res.Node.Name, params.ComponentID),
 				},
 			},
 		}, nil, nil
 	}
 
-	// Summary
-	monitorCount := 0
-	seenMonitors := make(map[string]bool)
-	for _, row := range rows {
-		if !seenMonitors[row.Name] {
-			monitorCount++
-			seenMonitors[row.Name] = true
-		}
-	}
-	sb.WriteString(fmt.Sprintf("Found %d monitor(s) in %s state:\n\n", monitorCount, state))
-
-	// Header
-	sb.WriteString("| Monitor Name | Description | Affected Count | Affected Component |\n")
+	// Build output table
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Found %d monitor(s) for component '%s' (ID: %d):\n\n", len(res.Node.SyncedCheckStates), res.Node.Name, params.ComponentID))
+	sb.WriteString("| Monitor Name | Health | Query | Remediation Hint |\n")
 	sb.WriteString("|---|---|---|---|\n")
 
-	// Data rows
-	for _, row := range rows {
-		desc := row.Description
-		if desc == "" {
-			desc = "-"
+	for _, checkStateData := range res.Node.SyncedCheckStates {
+		// Extract monitor name from check state data
+		name := ""
+		if nameField, ok := checkStateData["name"].(string); ok {
+			name = nameField
 		}
-		// Truncate long descriptions
-		if len(desc) > 50 {
-			desc = desc[:47] + "..."
+
+		// Extract health
+		health := ""
+		if healthField, ok := checkStateData["health"].(string); ok {
+			health = healthField
 		}
-		sb.WriteString(fmt.Sprintf("| %s | %s | %d | %s |\n", row.Name, desc, row.AffectedCount, row.AffectedComponent))
+
+		// Extract data.displayTimeSeries for queries
+		query := "-"
+		hint := "-"
+		if dataField, ok := checkStateData["data"].(map[string]interface{}); ok {
+			// Extract remediation hint
+			if remediationHint, ok := dataField["remediationHint"].(string); ok {
+				hint = remediationHint
+				if len(hint) > 100 {
+					hint = hint[:97] + "..."
+				}
+			}
+
+			// Extract query from displayTimeSeries
+			if displayTimeSeries, ok := dataField["displayTimeSeries"].([]interface{}); ok && len(displayTimeSeries) > 0 {
+				if series, ok := displayTimeSeries[0].(map[string]interface{}); ok {
+					if queries, ok := series["queries"].([]interface{}); ok && len(queries) > 0 {
+						if queryData, ok := queries[0].(map[string]interface{}); ok {
+							if q, ok := queryData["query"].(string); ok {
+								query = fmt.Sprintf("`%s`", q)
+								if len(query) > 80 {
+									query = query[:77] + "...`"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n", name, health, query, hint))
 	}
 
 	return &mcp.CallToolResult{
