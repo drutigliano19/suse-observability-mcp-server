@@ -11,104 +11,112 @@ import (
 )
 
 type GetComponentsParams struct {
-	// Raw STQL query (takes precedence if provided)
-	Query string `json:"query,omitempty" jsonschema:"Raw STQL query for advanced filtering. If provided, other filters are ignored."`
+	// Filters - all support multiple comma-separated values
+	Names        string `json:"names,omitempty" jsonschema:"Component names to match (comma-separated for multiple values, e.g., 'checkout-service,redis-master')"`
+	Types        string `json:"types,omitempty" jsonschema:"Component types to filter (comma-separated, e.g., 'pod,service,deployment')"`
+	Layers       string `json:"layers,omitempty" jsonschema:"Layers to filter (comma-separated, e.g., 'Containers,Services')"`
+	Domains      string `json:"domains,omitempty" jsonschema:"Domains to filter (comma-separated, e.g., 'cluster1.example.com,cluster2.example.com')"`
+	HealthStates string `json:"healthstates,omitempty" jsonschema:"Health states to filter (comma-separated, e.g., 'CRITICAL,DEVIATING')"`
 
-	// Simple filters (used if query is not provided)
-	NamePattern string `json:"name_pattern,omitempty" jsonschema:"Component name with wildcard support (e.g., 'checkout*', 'redis*')"`
-	Type        string `json:"type,omitempty" jsonschema:"Component type filter (e.g., 'pod', 'service', 'deployment')"`
-	Layer       string `json:"layer,omitempty" jsonschema:"Layer filter (e.g., 'Containers', 'Services')"`
-	Domain      string `json:"domain,omitempty" jsonschema:"Domain filter (e.g., 'cluster.example.com')"`
-	HealthState string `json:"healthstate,omitempty" jsonschema:"Health state filter (e.g., 'CRITICAL', 'DEVIATING', 'CLEAR')"`
-
-	// withNeighborsOf parameters (only used with simple filters, not with raw query)
+	// withNeighborsOf parameters
 	WithNeighbors          bool   `json:"with_neighbors,omitempty" jsonschema:"Include connected components using withNeighborsOf function"`
 	WithNeighborsLevels    string `json:"with_neighbors_levels,omitempty" jsonschema:"Number of levels (1-14) or 'all' for withNeighborsOf,default=1"`
 	WithNeighborsDirection string `json:"with_neighbors_direction,omitempty" jsonschema:"Direction: 'up', 'down', or 'both' for withNeighborsOf,default=both"`
 }
 
 type Component struct {
-	ID          int64          `json:"id"`
-	Name        string         `json:"name"`
-	Type        string         `json:"type"`
-	Identifiers []string       `json:"identifiers,omitempty"`
-	Tags        []string       `json:"tags,omitempty"`
-	State       map[string]any `json:"state,omitempty"`
-	Relations   []int64        `json:"relations,omitempty"` // Outgoing relation IDs
+	ID    int64  `json:"id"`
+	Name  string `json:"name"`
+	Type  string `json:"type"`
+	State string `json:"state,omitempty"`
 }
 
 // GetComponents searches for topology components using STQL filters
 func (t tool) GetComponents(ctx context.Context, request *mcp.CallToolRequest, params GetComponentsParams) (*mcp.CallToolResult, any, error) {
 	var query string
 
-	// If raw query is provided, use it directly
-	if params.Query != "" {
-		query = params.Query
-	} else {
-		// Build STQL query from parameters
-		var queryParts []string
+	// Build STQL query from parameters using IN/NOT IN operators
+	var queryParts []string
 
-		// Add name filter with wildcard support
-		if params.NamePattern != "" {
-			queryParts = append(queryParts, fmt.Sprintf("name = \"%s\"", params.NamePattern))
+	// Helper function to parse comma-separated values and build IN clause
+	buildInClause := func(fieldName, values string) string {
+		if values == "" {
+			return ""
 		}
-
-		// Add type filter
-		if params.Type != "" {
-			queryParts = append(queryParts, fmt.Sprintf("type = \"%s\"", params.Type))
-		}
-
-		// Add layer filter
-		if params.Layer != "" {
-			queryParts = append(queryParts, fmt.Sprintf("layer = \"%s\"", params.Layer))
-		}
-
-		// Add domain filter
-		if params.Domain != "" {
-			queryParts = append(queryParts, fmt.Sprintf("domain = \"%s\"", params.Domain))
-		}
-
-		// Add healthstate filter
-		if params.HealthState != "" {
-			queryParts = append(queryParts, fmt.Sprintf("healthstate = \"%s\"", params.HealthState))
-		}
-
-		// Combine basic filters with AND
-		if len(queryParts) > 0 {
-			query = strings.Join(queryParts, " AND ")
-		}
-
-		// Add withNeighborsOf if requested
-		if params.WithNeighbors {
-			if query == "" {
-				return nil, nil, fmt.Errorf("with_neighbors requires at least one filter to define the components")
+		parts := strings.Split(values, ",")
+		quoted := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				quoted = append(quoted, fmt.Sprintf("\"%s\"", p))
 			}
-
-			// Set defaults for levels and direction
-			levels := params.WithNeighborsLevels
-			if levels == "" {
-				levels = "1"
-			}
-			direction := params.WithNeighborsDirection
-			if direction == "" {
-				direction = "both"
-			}
-
-			// Validate direction
-			validDirections := map[string]bool{"up": true, "down": true, "both": true}
-			if !validDirections[direction] {
-				return nil, nil, fmt.Errorf("invalid with_neighbors_direction '%s'. Must be 'up', 'down', or 'both'", direction)
-			}
-
-			// Build withNeighborsOf function
-			// According to STQL spec, combine the base filters with OR when using withNeighborsOf
-			neighborsQuery := fmt.Sprintf("withNeighborsOf(components = (%s), levels = \"%s\", direction = \"%s\")", query, levels, direction)
-			query = fmt.Sprintf("%s OR %s", query, neighborsQuery)
 		}
+		if len(quoted) == 0 {
+			return ""
+		}
+		return fmt.Sprintf("%s IN (%s)", fieldName, strings.Join(quoted, ", "))
+	}
+
+	// Add names filter
+	if clause := buildInClause("name", params.Names); clause != "" {
+		queryParts = append(queryParts, clause)
+	}
+
+	// Add types filter
+	if clause := buildInClause("type", params.Types); clause != "" {
+		queryParts = append(queryParts, clause)
+	}
+
+	// Add layers filter
+	if clause := buildInClause("layer", params.Layers); clause != "" {
+		queryParts = append(queryParts, clause)
+	}
+
+	// Add domains filter
+	if clause := buildInClause("domain", params.Domains); clause != "" {
+		queryParts = append(queryParts, clause)
+	}
+
+	// Add healthstates filter
+	if clause := buildInClause("healthstate", params.HealthStates); clause != "" {
+		queryParts = append(queryParts, clause)
+	}
+
+	// Combine basic filters with AND
+	if len(queryParts) > 0 {
+		query = strings.Join(queryParts, " AND ")
+	}
+
+	// Add withNeighborsOf if requested
+	if params.WithNeighbors {
+		if query == "" {
+			return nil, nil, fmt.Errorf("with_neighbors requires at least one filter to define the components")
+		}
+
+		// Set defaults for levels and direction
+		levels := params.WithNeighborsLevels
+		if levels == "" {
+			levels = "1"
+		}
+		direction := params.WithNeighborsDirection
+		if direction == "" {
+			direction = "both"
+		}
+
+		// Validate direction
+		validDirections := map[string]bool{"up": true, "down": true, "both": true}
+		if !validDirections[direction] {
+			return nil, nil, fmt.Errorf("invalid with_neighbors_direction '%s'. Must be 'up', 'down', or 'both'", direction)
+		}
+
+		// Build withNeighborsOf function
+		// According to STQL spec, combine the base filters with OR when using withNeighborsOf
+		neighborsQuery := fmt.Sprintf("withNeighborsOf(components = (%s), levels = \"%s\", direction = \"%s\")", query, levels, direction)
+		query = fmt.Sprintf("%s OR %s", query, neighborsQuery)
 	}
 
 	if query == "" {
-		return nil, nil, fmt.Errorf("either 'query' or at least one filter (name_pattern, type, layer, domain, healthstate) must be provided")
+		return nil, nil, fmt.Errorf("at least one filter (names, types, layers, domains, healthstates) must be provided")
 	}
 
 	// Execute topology query
@@ -133,12 +141,9 @@ func simplifyViewComponents(components []suseobservability.ViewComponent) []Comp
 	var simplified []Component
 	for _, c := range components {
 		simplified = append(simplified, Component{
-			ID:          c.ID,
-			Name:        c.Name,
-			Type:        c.InternalType,
-			Identifiers: c.Identifiers,
-			Tags:        c.Tags,
-			Relations:   c.OutgoingRelations,
+			ID:    c.ID,
+			Name:  c.Name,
+			State: c.State.HealthState,
 		})
 	}
 	return simplified
@@ -153,48 +158,35 @@ func formatComponentsTable(components []Component, params GetComponentsParams, q
 
 	// Summary
 	sb.WriteString(fmt.Sprintf("Found %d component(s)", len(components)))
-	if params.Query != "" {
-		sb.WriteString(fmt.Sprintf(" for query: %s", params.Query))
-	} else {
-		filters := []string{}
-		if params.NamePattern != "" {
-			filters = append(filters, fmt.Sprintf("name: %s", params.NamePattern))
-		}
-		if params.Type != "" {
-			filters = append(filters, fmt.Sprintf("type: %s", params.Type))
-		}
-		if params.Layer != "" {
-			filters = append(filters, fmt.Sprintf("layer: %s", params.Layer))
-		}
-		if params.Domain != "" {
-			filters = append(filters, fmt.Sprintf("domain: %s", params.Domain))
-		}
-		if params.HealthState != "" {
-			filters = append(filters, fmt.Sprintf("healthstate: %s", params.HealthState))
-		}
-		if len(filters) > 0 {
-			sb.WriteString(" (" + strings.Join(filters, ", ") + ")")
-		}
+
+	filters := []string{}
+	if params.Names != "" {
+		filters = append(filters, fmt.Sprintf("names: %s", params.Names))
+	}
+	if params.Types != "" {
+		filters = append(filters, fmt.Sprintf("types: %s", params.Types))
+	}
+	if params.Layers != "" {
+		filters = append(filters, fmt.Sprintf("layers: %s", params.Layers))
+	}
+	if params.Domains != "" {
+		filters = append(filters, fmt.Sprintf("domains: %s", params.Domains))
+	}
+	if params.HealthStates != "" {
+		filters = append(filters, fmt.Sprintf("healthstates: %s", params.HealthStates))
+	}
+	if len(filters) > 0 {
+		sb.WriteString(" (" + strings.Join(filters, ", ") + ")")
 	}
 	sb.WriteString(":\n\n")
 
 	// Header
-	sb.WriteString("| Component Name | Type | ID | Identifiers |\n")
-	sb.WriteString("|---|---|---|---|\n")
+	sb.WriteString("| Component Name | ID | State |\n")
+	sb.WriteString("|---|---|---|\n")
 
 	// Data rows
 	for _, c := range components {
-		identifiersStr := "-"
-		if len(c.Identifiers) > 0 {
-			// Show first 2 identifiers to keep table readable
-			if len(c.Identifiers) > 2 {
-				identifiersStr = strings.Join(c.Identifiers[:2], ", ") + "..."
-			} else {
-				identifiersStr = strings.Join(c.Identifiers, ", ")
-			}
-		}
-
-		sb.WriteString(fmt.Sprintf("| %s | %s | %d | %s |\n", c.Name, c.Type, c.ID, identifiersStr))
+		sb.WriteString(fmt.Sprintf("| %s | %d | %s |\n", c.Name, c.ID, c.State))
 	}
 
 	return sb.String()

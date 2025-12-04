@@ -64,18 +64,16 @@ func main() {
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "getComponents",
 		Description: `Searches for topology components using STQL filters.
-		Arguments:
-		- query (optional): Raw STQL query for advanced filtering (overrides other filters).
-		  Example: 'layer = "Containers" AND (healthstate = "CRITICAL" OR healthstate = "DEVIATING")'
-		- name_pattern (optional): Component name with wildcard support (e.g., 'checkout*', 'redis*').
-		- type (optional): Component type filter (e.g., 'pod', 'service', 'deployment').
-		- layer (optional): Layer filter (e.g., 'Containers', 'Services').
-		- domain (optional): Domain filter (e.g., 'cluster.example.com').
-		- healthstate (optional): Health state filter (e.g., 'CRITICAL', 'DEVIATING', 'CLEAR').
-		- with_neighbors (optional): Include connected components using withNeighborsOf (simple filters only).
+		Arguments (all support comma-separated values for multiple items):
+		- names (optional): Component names to match exactly (comma-separated, e.g., 'checkout-service,redis-master').
+		- types (optional): Component types (comma-separated, e.g., 'pod,service,deployment').
+		- layers (optional): Layers (comma-separated, e.g., 'Containers,Services').
+		- domains (optional): Domains (comma-separated, e.g., 'cluster1.example.com,cluster2.example.com').
+		- healthstates (optional): Health states (comma-separated, e.g., 'CRITICAL,DEVIATING'). Useful to query multiple states at once.
+		- with_neighbors (optional): Include connected components using withNeighborsOf.
 		- with_neighbors_levels (optional): Number of levels (1-14) or 'all' (default: 1).
 		- with_neighbors_direction (optional): 'up', 'down', or 'both' (default: both).
-		Either 'query' or at least one simple filter must be provided.
+		At least one filter must be provided. All filters use STQL IN operator for efficient multi-value queries.
 		Returns:
 		A markdown table of matching components with their IDs and identifiers`},
 		mcpTools.GetComponents,
