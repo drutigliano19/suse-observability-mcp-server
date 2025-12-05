@@ -81,11 +81,18 @@ func main() {
 	)
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
-		Name: "queryTraces",
-		Description: `Get all the tracing data available for a list of services (also associated with a list of namespaces), limited to 100 entries and to 1 previous hour (counted from start time to now).
-		Use this to retrieve tracing data for services, or to help debug a failing service by inspecting its traces.
+		Name: "getAttributeFilters",
+		Description: `Get all attribute filters available for the tracing data.
 		Returns:
-		The JSON representation of the traces found for in this particular service`},
+		The JSON representation of all the attributes that can be set for the queryTraces filter.`},
+		mcpTools.GetAttributeFilters,
+	)
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "queryTraces",
+		Description: `Get all the tracing data available, limited to 100 entries and to 1 previous hour.
+		Use this to retrieve tracing data for services, or to help debug a failing service by inspecting its traces. There are several optional filters available for the tracing data. Remember that most filters are case-sensitive.
+		Returns:
+		The JSON representation of the traces found for the filters applied`},
 		mcpTools.QueryTraces,
 	)
 

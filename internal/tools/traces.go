@@ -10,8 +10,28 @@ import (
 )
 
 type QueryTracesCriteria struct {
-	ServiceName      []string `json:"serviceName" jsonschema:"The name(s) of the service(s) that you want to search for tracing data"`
-	ServiceNamespace []string `json:"serviceNamespace" jsonschema:"The namespace(s) of the service(s) that you want to search for tracing data"`
+	AttributeFilters map[string][]string `json:"attributes" jsonschema:"Optional attributes to filter. The key is the attribute name, the value is a list of valid values for that key. Leave it empty to ignore this filter. Exemple attributes are: service.name, service.namespace, component among others."`
+}
+
+func (t tool) GetAttributeFilters(ctx context.Context, request *mcp.CallToolRequest, criteria QueryTracesCriteria) (resp *mcp.CallToolResult, a any, err error) {
+	result, err := t.client.RetrieveAllAttributeFilters(ctx)
+	if err != nil {
+		return
+	}
+
+	resultJSON, err := json.Marshal(result)
+	if err != nil {
+		return
+	}
+
+	resp = &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{
+				Text: string(resultJSON),
+			},
+		},
+	}
+	return
 }
 
 func (t tool) QueryTraces(ctx context.Context, request *mcp.CallToolRequest, criteria QueryTracesCriteria) (resp *mcp.CallToolResult, a any, err error) {
@@ -25,10 +45,7 @@ func (t tool) QueryTraces(ctx context.Context, request *mcp.CallToolRequest, cri
 		},
 		Body: suseobservability.TracesRequestBody{
 			PrimarySpanFilter: suseobservability.PrimarySpanFilter{
-				Attributes: suseobservability.ConstrainedAttributes{
-					ServiceName:      criteria.ServiceName,
-					ServiceNamespace: criteria.ServiceNamespace,
-				},
+				Attributes: suseobservability.ConstrainedAttributes(criteria.AttributeFilters),
 			},
 		},
 	})

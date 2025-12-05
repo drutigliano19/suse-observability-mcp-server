@@ -78,6 +78,14 @@ func (c Client) GetTraceSpan(ctx context.Context, traceId string, spanId string)
 	return &res, nil
 }
 
+func (c Client) RetrieveAllAttributeFilters(ctx context.Context) (res AttributeResult, err error) {
+	err = c.apiRequests("traces/spans/fields/attributes").
+		Param("contains", "").
+		ToJSON(&res).
+		Fetch(ctx)
+	return
+
+}
 func (c Client) RetrieveTraces(ctx context.Context, req TracesRequest) (res TracesResult, err error) {
 	err = c.apiRequests("traces/query").
 		Post().
