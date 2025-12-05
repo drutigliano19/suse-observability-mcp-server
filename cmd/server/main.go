@@ -80,6 +80,16 @@ func main() {
 		mcpTools.ListMonitors,
 	)
 
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "listTraces",
+		Description: `Get all the tracing data available for component.
+                Arguments:
+                - component_id (required): The ID of the component that you want to capture the tracing data.
+		Returns:
+		The JSON representation of the traces found`},
+		mcpTools.ListTraces,
+	)
+
 	if *listenAddr == "" {
 		// Run the server on the stdio transport.
 		if err := mcpServer.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
