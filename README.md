@@ -24,12 +24,17 @@ The server currently exposes the following tools for AI agents:
     -   Returns: A markdown table showing the bound metrics with their names, units, and query expressions
 
 -   **`getMetrics`**: Query metrics from SUSE Observability over a range of time.
-    -   Arguments: 
+    -   Arguments:
         - `query` (string, required): The PromQL query to execute
         - `start` (string, required): Start time for the query (e.g., 'now', '1h')
         - `end` (string, required): End time for the query (e.g., 'now', '1h')
         - `step` (string, optional): Query resolution step width (e.g., '15s', '1m', defaults to '1m')
     -   Returns: A markdown table with the visual representation of the query result
+
+### Traces Tools
+-   **`listMetrics`**: Lists bound traces for a specific OTEL component.
+    -   Arguments: `component_id` (integer, required): The ID of the component to list bound traces for (from topology queries)
+    -   Returns: A JSON representation of all the tracing data associated with that component (limited to 1h and 100 entries)
 
 ### Monitors Tools
 
