@@ -15,6 +15,28 @@ type ListTracesParams struct {
 	ComponentID int64 `json:"component_id" jsonschema:"required,The ID of the component to list bound traces for"`
 }
 
+type GetTraceParams struct {
+	TraceID string `json:"trace_id" jsonschema:"the ID of the trace you want to retrieve and inspect"`
+}
+
+func (t tool) GetTrace(ctx context.Context, request *mcp.CallToolRequest, params GetTraceParams) (resp *mcp.CallToolResult, a any, err error) {
+	traceData, err := t.client.GetTrace(ctx, params.TraceID)
+
+	outputBytes, err := json.Marshal(traceData)
+	if err != nil {
+		return
+	}
+
+	resp = &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{
+				Text: string(outputBytes),
+			},
+		},
+	}
+	return
+}
+
 func (t tool) ListTraces(ctx context.Context, request *mcp.CallToolRequest, params ListTracesParams) (resp *mcp.CallToolResult, a any, err error) {
 	query := "(label IN (\"stackpack:open-telemetry\") AND type IN (\"otel service\"))"
 	components, err := t.client.SnapShotTopologyQuery(ctx, query)
@@ -52,7 +74,7 @@ func (t tool) ListTraces(ctx context.Context, request *mcp.CallToolRequest, para
 			Start:    now.Add(-time.Hour),
 			End:      now,
 			Page:     0,
-			PageSize: 100,
+			PageSize: 20,
 		},
 		Body: suseobservability.TracesRequestBody{
 			PrimarySpanFilter: suseobservability.PrimarySpanFilter{
@@ -67,7 +89,12 @@ func (t tool) ListTraces(ctx context.Context, request *mcp.CallToolRequest, para
 		return
 	}
 
-	resultJSON, err := json.Marshal(result)
+	traceIDs := make([]string, len(result.Traces))
+	for i := range result.Traces {
+		traceIDs[i] = result.Traces[i].TraceID
+	}
+
+	outputBytes, err := json.Marshal(traceIDs)
 	if err != nil {
 		return
 	}
@@ -75,7 +102,7 @@ func (t tool) ListTraces(ctx context.Context, request *mcp.CallToolRequest, para
 	resp = &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{
-				Text: string(resultJSON),
+				Text: string(outputBytes),
 			},
 		},
 	}

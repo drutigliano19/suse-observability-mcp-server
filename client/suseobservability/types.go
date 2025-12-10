@@ -684,11 +684,19 @@ type ComponentNode struct {
 	SyncedCheckStates []map[string]interface{} `json:"syncedCheckStates"`
 }
 
-type TracesResult map[string]interface{}
+type TracesResult struct {
+	Traces []struct {
+		TraceID string `json:"traceId"`
+	} `json:"traces"`
+}
 
 type TracesRequest struct {
 	Params QueryParams
 	Body   TracesRequestBody
+}
+
+type GetTraceRequest struct {
+	TraceID string
 }
 
 type TracesRequestBody struct {

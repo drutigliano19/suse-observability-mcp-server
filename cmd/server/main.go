@@ -82,12 +82,21 @@ func main() {
 
 	mcp.AddTool(mcpServer, &mcp.Tool{
 		Name: "listTraces",
-		Description: `Get all the tracing data available for component.
+		Description: `Get all the IDs of all the tracing data available for component.
                 Arguments:
                 - component_id (required): The ID of the component that you want to capture the tracing data.
 		Returns:
-		The JSON representation of the traces found`},
+		A list with all trace IDs`},
 		mcpTools.ListTraces,
+	)
+	mcp.AddTool(mcpServer, &mcp.Tool{
+		Name: "getTrace",
+		Description: `Get the full information for a given trace ID.
+                Arguments:
+                - trace_id (required): The ID of the trace that you want to inspect.
+		Returns:
+		A JSON representation of the trace`},
+		mcpTools.GetTrace,
 	)
 
 	if *listenAddr == "" {
