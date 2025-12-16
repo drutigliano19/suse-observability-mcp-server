@@ -14,13 +14,14 @@ RUN go mod download
 COPY . .
 
 # Build the application.
-RUN CGO_ENABLED=0 go build cmd/server/main.go -o /app/mcp
+# Build the application.
+RUN CGO_ENABLED=0 go build -o /app/mcp cmd/server/main.go
 
 # --- Final Stage ---
-FROM registry.suse.com/bci/bci-micro:15.7
+FROM registry.suse.com/bci/bci-micro:15.6
 
 # Copy the static binary from the build stage.
-COPY --from=builder /app/mcp /suse-observability-mcp-server
+COPY --from=builder /app/mcp /mcp
 
 # Expose the port that the HTTP server will listen on, as mentioned in the README.
 EXPOSE 8080
